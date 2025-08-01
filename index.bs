@@ -828,12 +828,18 @@ url: https://w3c.github.io/permissions/#permissions-task-source; type: dfn;
 
 		<div id="clipboard-idl" dfn-for="Clipboard">
 		<div class="algorithm" data-algorithm="clipboard-read">
-		<h4 method for="Clipboard">read(|formats|)</h4>
+		<h4 method for="Clipboard">read(|types|, |formats|)</h4>
 		The {{Clipboard/read(formats)}} method must run these steps:
 
 			1. Let |realm| be [=this=]'s [=relevant realm=].
 
 			1. Let |p| be [=a new promise=] in |realm|.
+
+			1. If |types| is not empty, theb:
+
+				1. For each |type| in |types|:
+
+					1. If |type| is not in [=well-known mime type from os specific format=], then [=reject=] |p| with |format| {{"NotAllowedError"}} {{DOMException}} in |realm|.
 
 			1. If |formats| is not empty, then:
 
@@ -870,6 +876,8 @@ url: https://w3c.github.io/permissions/#permissions-task-source; type: dfn;
 						1. Set |representation|'s [=representation/MIME type=] to |mimeType|.
 
 						1. Let |isUnsanitized| be |false|.
+
+						1. If [=representation/MIME type=] is not present in |types| continue this loop.
 
 						1. If |formats| is not empty, then:
 
