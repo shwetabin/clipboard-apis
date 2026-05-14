@@ -932,6 +932,8 @@ url: https://storage.spec.whatwg.org/#obtain-a-storage-key-for-non-storage-purpo
 
 						Note: This ensures that stale data is never returned. If the [=system clipboard=] contents have changed since {{Clipboard/read()}} was called, this MUST fail rather than returning data that does not correspond to the current [=system clipboard=] state.
 
+						Note: A null [=ClipboardItem/clipboard change count at read=] indicates that this {{ClipboardItem}} was constructed directly by the author (e.g., via {{ClipboardItem/ClipboardItem(items, options)}}), not obtained from {{Clipboard/read()}}. In that case, no stale-data check is needed because the data does not originate from the [=system clipboard=].
+
 					1. If |representation|'s [=representation/data=] is not yet resolved, run the following steps [=in parallel=]:
 
 						Note: When a {{ClipboardItem}} is obtained from {{Clipboard/read()}}, its [=representation/data=] is initialized to an unresolved promise so that the OS clipboard read can be deferred to this point.
