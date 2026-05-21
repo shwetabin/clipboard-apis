@@ -162,6 +162,14 @@ url: https://storage.spec.whatwg.org/#obtain-a-storage-key-for-non-storage-purpo
 
 	The [=system clipboard=] has a <dfn>clipboard change count</dfn>, which is a value that changes each time the [=system clipboard data=] is modified.
 
+	To <dfn>read bytes</dfn> for a string |name| from the [=system clipboard=]:
+
+	1. Let |item| be the [=system clipboard item=] currently held in the [=system clipboard=]. If there is no such item, return failure.
+
+	1. Let |representation| be the [=system clipboard representation=] in |item|'s list of [=system clipboard representation=]s whose [=system clipboard representation/name=] is |name|. If there is no such [=system clipboard representation=], return failure.
+
+	1. Return |representation|'s [=system clipboard representation/data=].
+
 <h2 id="clipboard-events-and-interfaces">Clipboard Events</h2>
 
 	<h3 id="clipboard-event-interfaces">Clipboard event interfaces</h3>
@@ -836,6 +844,10 @@ url: https://storage.spec.whatwg.org/#obtain-a-storage-key-for-non-storage-purpo
 
 		A {{ClipboardItem}} object has an associated <dfn for="ClipboardItem">unsanitized MIME types</dfn>, which is a [=sequence=]&lt;{{DOMString}}&gt;, initially empty. When the {{ClipboardItem}} is created from {{Clipboard/read()}}, this is set to the list of MIME types the caller requested as unsanitized via {{ClipboardUnsanitizedFormats}}.
 
+		A {{ClipboardItem}} object has an associated <dfn for="ClipboardItem">representations with resolvers</dfn>, which is a [=/map=] from a string (the [=/MIME type=] as passed to {{ClipboardItem/getType()}}, including the `"web "` prefix when present) to a {{Promise}}&lt;{{Blob}}&gt;, initially empty. Each entry represents an OS clipboard read for that type that has either completed or is currently in flight.
+
+		Note: This map ensures that concurrent {{ClipboardItem/getType()}} calls for the same MIME type on a {{ClipboardItem}} obtained from {{Clipboard/read()}} share a single OS clipboard read. The first call inserts a pending {{Promise}} into the map and initiates the read; subsequent calls for the same MIME type return the existing {{Promise}} without re-reading the [=system clipboard=].
+
 		<p class=note>
 		When a {{ClipboardItem}} is created by {{Clipboard/read()}}, it acts as a lazy fetcher rather than a data snapshot. Its [=ClipboardItem/types array=] reflects the formats available on the [=system clipboard=] at the time of the {{Clipboard/read()}} call, but the actual payload bytes are not read until {{ClipboardItem/getType()}} is called. If the [=system clipboard=] contents change between the {{Clipboard/read()}} call and a subsequent {{ClipboardItem/getType()}} call, the {{ClipboardItem/getType()}} call will be rejected. A {{ClipboardItem}} constructed directly via the {{ClipboardItem/ClipboardItem(items, options)}} constructor is not subject to this behavior.
 		</p>
@@ -908,6 +920,8 @@ url: https://storage.spec.whatwg.org/#obtain-a-storage-key-for-non-storage-purpo
 
 			1. Let |realm| be [=this=]'s [=relevant realm=].
 
+			1. Let |originalType| be |type|.
+
 			1. Let |isCustom| be |false|.
 
 			1. If |type| [=string/starts with=] `"web "` prefix, then:
@@ -934,39 +948,47 @@ url: https://storage.spec.whatwg.org/#obtain-a-storage-key-for-non-storage-purpo
 
 						Note: A null [=ClipboardItem/clipboard change count at read=] indicates that this {{ClipboardItem}} was constructed directly by the author (e.g., via {{ClipboardItem/ClipboardItem(items, options)}}), not obtained from {{Clipboard/read()}}. In that case, no stale-data check is needed because the data does not originate from the [=system clipboard=].
 
-					1. If |representation|'s [=representation/data=] is not yet resolved, run the following steps [=in parallel=]:
+					1. If [=this=]'s [=ClipboardItem/clipboard change count at read=] is not null, then:
 
-						Note: When a {{ClipboardItem}} is obtained from {{Clipboard/read()}}, its [=representation/data=] is initialized to an unresolved promise so that the OS clipboard read can be deferred to this point.
+						Note: This branch covers {{ClipboardItem}}s obtained from {{Clipboard/read()}}, for which the OS clipboard read is deferred to this point. To ensure the read happens at most once per type — even if {{ClipboardItem/getType()}} is called multiple times concurrently for the same MIME type — the resulting {{Promise}} is cached in [=this=]'s [=ClipboardItem/representations with resolvers=] map, keyed by the original |type| string (so that `"text/html"` and `"web text/html"` are tracked independently).
 
-						1. If |isCustom| is true, then:
+						1. If [=this=]'s [=ClipboardItem/representations with resolvers=][|originalType|] [=map/exists=], then return [=this=]'s [=ClipboardItem/representations with resolvers=][|originalType|].
 
-							1. Let |webCustomFormatMap| be the [=os specific custom map name=].
+						1. [=map/Set=] [=this=]'s [=ClipboardItem/representations with resolvers=][|originalType|] to |p|.
 
-							1. Read |webCustomFormatMap| from the [=system clipboard=].
+						1. Run the following steps [=in parallel=]:
 
-							1. Let |webCustomFormatMapString| be the JSON string deserialized from |webCustomFormatMap|.
+							1. If |isCustom| is true, then:
 
-							1. Let |osFormatName| be the value in |webCustomFormatMapString| whose key matches |mimeType| [=serialize a MIME type|serialized=].
+								1. Let |webCustomFormatMap| be the [=os specific custom map name=].
 
-							1. If |osFormatName| is not found, then [=queue a global task=] on the [=clipboard task source=], given |realm|'s [=realm/global object=], to [=reject=] |p| with a {{"NotFoundError"}} {{DOMException}} in |realm|, then abort these steps.
+								1. Read |webCustomFormatMap| from the [=system clipboard=].
 
-						1. Else, let |osFormatName| be the result of running [=os specific well-known format=] given |mimeType|.
+								1. Let |webCustomFormatMapString| be the JSON string deserialized from |webCustomFormatMap|.
 
-						1. Let |rawData| be the result of reading bytes for |osFormatName| from the [=system clipboard=].
+								1. Let |osFormatName| be the value in |webCustomFormatMapString| whose key matches |mimeType| [=serialize a MIME type|serialized=].
 
-						1. If |rawData| is failure, then [=queue a global task=] on the [=clipboard task source=], given |realm|'s [=realm/global object=], to [=reject=] |p| with a {{"NotFoundError"}} {{DOMException}} in |realm|, then abort these steps.
+								1. If |osFormatName| is not found, then [=queue a global task=] on the [=clipboard task source=], given |realm|'s [=realm/global object=], to [=reject=] |p| with a {{"NotFoundError"}} {{DOMException}} in |realm|, then abort these steps.
 
-						1. Let |cleanData| be a copy of |rawData|.
+							1. Else, let |osFormatName| be the result of running [=os specific well-known format=] given |mimeType|.
 
-						1. If |mimeType|'s [=MIME type/essence=] is in [=this=]'s [=ClipboardItem/unsanitized MIME types=] and |mimeType|'s [=MIME type/essence=] is in the [=optional unsanitized data types=] list, then do nothing.
+							1. Let |rawData| be the result of [=reading bytes=] for |osFormatName| from the [=system clipboard=].
 
-						1. Else, if |mimeType|'s [=MIME type/essence=] is not "image/png", the user agent MAY sanitize |cleanData|.
+							1. If |rawData| is failure, then [=queue a global task=] on the [=clipboard task source=], given |realm|'s [=realm/global object=], to [=reject=] |p| with a {{"NotFoundError"}} {{DOMException}} in |realm|, then abort these steps.
 
-						1. Let |blob| be a {{Blob}} whose {{Blob/type}} is |mimeType| [=serialize a MIME type|serialized=] and whose underlying byte sequence is |cleanData|.
+							1. Let |cleanData| be a copy of |rawData|.
 
-						1. [=Queue a global task=] on the [=clipboard task source=], given |realm|'s [=realm/global object=], to resolve |representation|'s [=representation/data=] with |blob|.
+							1. If |mimeType|'s [=MIME type/essence=] is in [=this=]'s [=ClipboardItem/unsanitized MIME types=] and |mimeType|'s [=MIME type/essence=] is in the [=optional unsanitized data types=] list, then do nothing.
 
-					Note: Once |representation|'s [=representation/data=] has been resolved by the steps above, subsequent calls to {{ClipboardItem/getType()}} for the same MIME type will reuse the cached result without re-reading the [=system clipboard=]. However, the stale data check above still applies: if the [=system clipboard=] has changed since {{Clipboard/read()}} was called, all {{ClipboardItem/getType()}} calls on this {{ClipboardItem}} will be rejected — even for previously cached data.
+							1. Else, if |mimeType|'s [=MIME type/essence=] is not "image/png", the user agent MAY sanitize |cleanData|.
+
+							1. Let |blob| be a {{Blob}} whose {{Blob/type}} is |mimeType| [=serialize a MIME type|serialized=] and whose underlying byte sequence is |cleanData|.
+
+							1. [=Queue a global task=] on the [=clipboard task source=], given |realm|'s [=realm/global object=], to resolve |p| with |blob|.
+
+						Note: Once |p| has settled, it remains in [=this=]'s [=ClipboardItem/representations with resolvers=] map. Subsequent {{ClipboardItem/getType()}} calls for the same MIME type will return the cached settled {{Promise}} without re-reading the [=system clipboard=]. The stale-data check above still applies on every call, however: if the [=system clipboard=] has changed since {{Clipboard/read()}} was called, all {{ClipboardItem/getType()}} calls on this {{ClipboardItem}} will be rejected with a {{"DataError"}} — even for previously cached data.
+
+						1. Return |p|.
 
 					1. Let |representationDataPromise| be the |representation|'s [=representation/data=].
 
