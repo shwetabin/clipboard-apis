@@ -912,8 +912,6 @@ url: https://storage.spec.whatwg.org/#obtain-a-storage-key-for-non-storage-purpo
 
 			1. Let |realm| be [=this=]'s [=relevant realm=].
 
-			1. Let |originalType| be |type|.
-
 			1. Let |isCustom| be |false|.
 
 			1. If |type| [=string/starts with=] `"web "` prefix, then:
@@ -942,11 +940,13 @@ url: https://storage.spec.whatwg.org/#obtain-a-storage-key-for-non-storage-purpo
 
 					1. If [=this=]'s [=ClipboardItem/clipboard change count at read=] is not null, then:
 
-						Note: This branch covers {{ClipboardItem}}s obtained from {{Clipboard/read()}}, for which the OS clipboard read is deferred to this point. To ensure the read happens at most once per type — even if {{ClipboardItem/getType()}} is called multiple times concurrently for the same MIME type — the resulting {{Promise}} is cached in [=this=]'s [=ClipboardItem/representations with resolvers=] map, keyed by the original |type| string (so that `"text/html"` and `"web text/html"` are tracked independently).
+						Note: This branch covers {{ClipboardItem}}s obtained from {{Clipboard/read()}}, for which the OS clipboard read is deferred to this point. To ensure the read happens at most once per type — even if {{ClipboardItem/getType()}} is called multiple times concurrently for the same MIME type — the resulting {{Promise}} is cached in [=this=]'s [=ClipboardItem/representations with resolvers=] map, keyed by a normalized type string so that `"text/html"` and `"web text/html"` are tracked independently while differently-cased spellings of the same type (e.g., `"text/HTML"` and `"text/html"`) collapse to a single entry.
 
-						1. If [=this=]'s [=ClipboardItem/representations with resolvers=][|originalType|] [=map/exists=], then return [=this=]'s [=ClipboardItem/representations with resolvers=][|originalType|].
+						1. Let |key| be the result of [=serializing a MIME type=] with |mimeType|. If |isCustom| is true, prefix |key| with `"web "`.
 
-						1. [=map/Set=] [=this=]'s [=ClipboardItem/representations with resolvers=][|originalType|] to |p|.
+						1. If [=this=]'s [=ClipboardItem/representations with resolvers=][|key|] [=map/exists=], then return [=this=]'s [=ClipboardItem/representations with resolvers=][|key|].
+
+						1. [=map/Set=] [=this=]'s [=ClipboardItem/representations with resolvers=][|key|] to |p|.
 
 						1. Run the following steps [=in parallel=]:
 
@@ -964,21 +964,21 @@ url: https://storage.spec.whatwg.org/#obtain-a-storage-key-for-non-storage-purpo
 
 							1. Else, let |osFormatName| be the result of running [=os specific well-known format=] given |mimeType|.
 
-						1. Let |clipboardItem| be the [=system clipboard item=] currently held in the [=system clipboard=]. If there is no such item, then [=queue a global task=] on the [=clipboard task source=], given |realm|'s [=realm/global object=], to [=reject=] |p| with a {{"NotFoundError"}} {{DOMException}} in |realm|, then abort these steps.
+							1. Let |clipboardItem| be the [=system clipboard item=] currently held in the [=system clipboard=]. If there is no such item, then [=queue a global task=] on the [=clipboard task source=], given |realm|'s [=realm/global object=], to [=reject=] |p| with a {{"NotFoundError"}} {{DOMException}} in |realm|, then abort these steps.
 
-						1. Let |clipboardRepresentation| be the [=system clipboard representation=] in |clipboardItem|'s list of [=system clipboard representation=]s whose [=system clipboard representation/name=] is |osFormatName|. If there is no such [=system clipboard representation=], then [=queue a global task=] on the [=clipboard task source=], given |realm|'s [=realm/global object=], to [=reject=] |p| with a {{"NotFoundError"}} {{DOMException}} in |realm|, then abort these steps.
+							1. Let |clipboardRepresentation| be the [=system clipboard representation=] in |clipboardItem|'s list of [=system clipboard representation=]s whose [=system clipboard representation/name=] is |osFormatName|. If there is no such [=system clipboard representation=], then [=queue a global task=] on the [=clipboard task source=], given |realm|'s [=realm/global object=], to [=reject=] |p| with a {{"NotFoundError"}} {{DOMException}} in |realm|, then abort these steps.
 
-						1. Let |rawData| be |clipboardRepresentation|'s [=system clipboard representation/data=].
+							1. Let |rawData| be |clipboardRepresentation|'s [=system clipboard representation/data=].
 
-						1. Let |cleanData| be a copy of |rawData|.
+							1. Let |cleanData| be a copy of |rawData|.
 
-						1. If |mimeType|'s [=MIME type/essence=] is in [=this=]'s [=ClipboardItem/unsanitized MIME types=] and |mimeType|'s [=MIME type/essence=] is in the [=optional unsanitized data types=] list, then do nothing.
+							1. If |mimeType|'s [=MIME type/essence=] is in [=this=]'s [=ClipboardItem/unsanitized MIME types=] and |mimeType|'s [=MIME type/essence=] is in the [=optional unsanitized data types=] list, then do nothing.
 
-						1. Else, if |mimeType|'s [=MIME type/essence=] is not "image/png", the user agent MAY sanitize |cleanData|.
+							1. Else, if |mimeType|'s [=MIME type/essence=] is not "image/png", the user agent MAY sanitize |cleanData|.
 
-						1. Let |blob| be a {{Blob}} whose {{Blob/type}} is |mimeType| [=serialize a MIME type|serialized=] and whose underlying byte sequence is |cleanData|.
+							1. Let |blob| be a {{Blob}} whose {{Blob/type}} is |mimeType| [=serialize a MIME type|serialized=] and whose underlying byte sequence is |cleanData|.
 
-						1. [=Queue a global task=] on the [=clipboard task source=], given |realm|'s [=realm/global object=], to resolve |p| with |blob|.
+							1. [=Queue a global task=] on the [=clipboard task source=], given |realm|'s [=realm/global object=], to resolve |p| with |blob|.
 
 						Note: Once |p| has settled, it remains in [=this=]'s [=ClipboardItem/representations with resolvers=] map. Subsequent {{ClipboardItem/getType()}} calls for the same MIME type will return the cached settled {{Promise}} without re-reading the [=system clipboard=]. The stale-data check above still applies on every call, however: if the [=system clipboard=] has changed since {{Clipboard/read()}} was called, all {{ClipboardItem/getType()}} calls on this {{ClipboardItem}} will be rejected with a {{"DataError"}} — even for previously cached data.
 
