@@ -834,6 +834,8 @@ url: https://storage.spec.whatwg.org/#obtain-a-storage-key-for-non-storage-purpo
 
 		A {{ClipboardItem}} object has an associated <dfn for="ClipboardItem">clipboard change count at read</dfn>, which is initially null. When the {{ClipboardItem}} is created from {{Clipboard/read()}}, this is set to the [=clipboard change count=] at the time the [=system clipboard data=] was snapshotted.
 
+		A {{ClipboardItem}} object has an associated <dfn for="ClipboardItem">originating system clipboard item</dfn>, which is a [=system clipboard item=] or null, initially null. When the {{ClipboardItem}} is created from {{Clipboard/read()}}, this is set to the specific [=system clipboard item=] in the [=system clipboard data=] snapshot from which this {{ClipboardItem}} was derived; for {{ClipboardItem}}s constructed by the author (e.g., via the {{ClipboardItem/ClipboardItem(items, options)}} constructor) it remains null. This slot, in combination with [=ClipboardItem/clipboard change count at read=], unambiguously identifies which [=system clipboard item=] subsequent {{ClipboardItem/getType()}} calls should read from, even on platforms where the [=system clipboard=] holds multiple items.
+
 		A {{ClipboardItem}} object has an associated <dfn for="ClipboardItem">unsanitized MIME types</dfn>, which is a [=sequence=]&lt;{{DOMString}}&gt;, initially empty. When the {{ClipboardItem}} is created from {{Clipboard/read()}}, this is set to the list of MIME types the caller requested as unsanitized via {{ClipboardUnsanitizedFormats}}.
 
 		A {{ClipboardItem}} object has an associated <dfn for="ClipboardItem">representations with resolvers</dfn>, which is a [=/map=] from a string (the [=/MIME type=] as passed to {{ClipboardItem/getType()}}, including the `"web "` prefix when present) to a {{Promise}}&lt;{{Blob}}&gt;, initially empty. Each entry represents an OS clipboard read for that type that has either completed or is currently in flight.
@@ -942,7 +944,7 @@ url: https://storage.spec.whatwg.org/#obtain-a-storage-key-for-non-storage-purpo
 
 						Note: This branch covers {{ClipboardItem}}s obtained from {{Clipboard/read()}}, for which the OS clipboard read is deferred to this point. To ensure the read happens at most once per type — even if {{ClipboardItem/getType()}} is called multiple times concurrently for the same MIME type — the resulting {{Promise}} is cached in [=this=]'s [=ClipboardItem/representations with resolvers=] map, keyed by a normalized type string so that `"text/html"` and `"web text/html"` are tracked independently while differently-cased spellings of the same type (e.g., `"text/HTML"` and `"text/html"`) collapse to a single entry.
 
-						1. Let |key| be the result of [=serializing a MIME type=] with |mimeType|. If |isCustom| is true, prefix |key| with `"web "`.
+						1. Let |key| be |mimeType|'s [=MIME type/essence=]. If |isCustom| is true, prefix |key| with `"web "`.
 
 						1. If [=this=]'s [=ClipboardItem/representations with resolvers=][|key|] [=map/exists=], then return [=this=]'s [=ClipboardItem/representations with resolvers=][|key|].
 
@@ -950,21 +952,23 @@ url: https://storage.spec.whatwg.org/#obtain-a-storage-key-for-non-storage-purpo
 
 						1. Run the following steps [=in parallel=]:
 
+							1. Let |clipboardItem| be [=this=]'s [=ClipboardItem/originating system clipboard item=].
+
+							1. If |clipboardItem| is null, then [=queue a global task=] on the [=clipboard task source=], given |realm|'s [=realm/global object=], to [=reject=] |p| with a {{"DataError"}} {{DOMException}} in |realm|, then abort these steps.
+
 							1. If |isCustom| is true, then:
 
-								1. Let |webCustomFormatMap| be the [=os specific custom map name=].
+								1. Let |mapName| be the [=os specific custom map name=].
 
-								1. Read |webCustomFormatMap| from the [=system clipboard=].
+								1. Let |mapRepresentation| be the [=system clipboard representation=] in |clipboardItem|'s list of [=system clipboard representation=]s whose [=system clipboard representation/name=] is |mapName|. If there is no such [=system clipboard representation=], then [=queue a global task=] on the [=clipboard task source=], given |realm|'s [=realm/global object=], to [=reject=] |p| with a {{"NotFoundError"}} {{DOMException}} in |realm|, then abort these steps.
 
-								1. Let |webCustomFormatMapString| be the JSON string deserialized from |webCustomFormatMap|.
+								1. Let |webCustomFormatMapString| be the JSON string deserialized from |mapRepresentation|'s [=system clipboard representation/data=].
 
 								1. Let |osFormatName| be the value in |webCustomFormatMapString| whose key matches |mimeType| [=serialize a MIME type|serialized=].
 
 								1. If |osFormatName| is not found, then [=queue a global task=] on the [=clipboard task source=], given |realm|'s [=realm/global object=], to [=reject=] |p| with a {{"NotFoundError"}} {{DOMException}} in |realm|, then abort these steps.
 
 							1. Else, let |osFormatName| be the result of running [=os specific well-known format=] given |mimeType|.
-
-							1. Let |clipboardItem| be the [=system clipboard item=] currently held in the [=system clipboard=]. If there is no such item, then [=queue a global task=] on the [=clipboard task source=], given |realm|'s [=realm/global object=], to [=reject=] |p| with a {{"NotFoundError"}} {{DOMException}} in |realm|, then abort these steps.
 
 							1. Let |clipboardRepresentation| be the [=system clipboard representation=] in |clipboardItem|'s list of [=system clipboard representation=]s whose [=system clipboard representation/name=] is |osFormatName|. If there is no such [=system clipboard representation=], then [=queue a global task=] on the [=clipboard task source=], given |realm|'s [=realm/global object=], to [=reject=] |p| with a {{"NotFoundError"}} {{DOMException}} in |realm|, then abort these steps.
 
@@ -1087,7 +1091,7 @@ url: https://storage.spec.whatwg.org/#obtain-a-storage-key-for-non-storage-purpo
 
 					Note: Only the [=system clipboard representation/name=]s (format identifiers) from |data| are enumerated at this point. The underlying payload bytes for each [=representation=] are not read until {{ClipboardItem/getType()}} is called.
 
-				1. Let |items| be a [=sequence=]&lt;[=/clipboard item=]&gt;.
+				1. Let |items| be a [=sequence=] of [=ordered map|ordered maps=], each entry having keys "item" (a [=/clipboard item=]) and "originating" (a [=system clipboard item=] or null).
 
 				1. For each |systemClipboardItem| in |data|:
 
@@ -1109,11 +1113,11 @@ url: https://storage.spec.whatwg.org/#obtain-a-storage-key-for-non-storage-purpo
 
 						1. Append |representation| to |item|'s [=list of representations=].
 					
-					1. If |item|'s [=list of representations=] size is greater than 0, append |item| to |items|.
+					1. If |item|'s [=list of representations=] size is greater than 0, append the [=ordered map=] «[ "item" → |item|, "originating" → |systemClipboardItem| ]» to |items|.
 
 				1. If |items| has a size > 0, then:
 				
-						1. Let |firstItem| be |items|[0]
+						1. Let |firstItem| be |items|[0]["item"]
 						
 						1. Run the [=read web custom format=] algorithm given |firstItem|.
 					
@@ -1123,18 +1127,20 @@ url: https://storage.spec.whatwg.org/#obtain-a-storage-key-for-non-storage-purpo
 
 						1. Run the [=read web custom format=] algorithm given |customItem|.
 
-						1. If |customItem|'s [=list of representations=] size is greater than 0, append |customItem| to |items|.
+						1. If |customItem|'s [=list of representations=] size is greater than 0, append the [=ordered map=] «[ "item" → |customItem|, "originating" → null ]» to |items|.
 
 
 				1. [=Queue a global task=] on the [=clipboard task source=], given |realm|'s [=realm/global object=], to perform the below steps:
 
 					1. Let |clipboardItems| be a [=sequence=]&lt;{{ClipboardItem}}&gt;.
 
-					1. For each [=/clipboard item=] |underlyingItem| of |items|:
+					1. For each [=ordered map=] |entry| of |items|:
 
-						1. Let |clipboardItem| be the result of running the steps of [=create a ClipboardItem object=] given |underlyingItem| and |realm|.
+						1. Let |clipboardItem| be the result of running the steps of [=create a ClipboardItem object=] given |entry|["item"] and |realm|.
 
 						1. Set |clipboardItem|'s [=ClipboardItem/clipboard change count at read=] to |snapshotChangeCount|.
+
+						1. Set |clipboardItem|'s [=ClipboardItem/originating system clipboard item=] to |entry|["originating"].
 
 						1. If |formats| is not empty, set |clipboardItem|'s [=ClipboardItem/unsanitized MIME types=] to |formats|["{{ClipboardUnsanitizedFormats/unsanitized}}"].
 
