@@ -934,7 +934,7 @@ url: https://storage.spec.whatwg.org/#obtain-a-storage-key-for-non-storage-purpo
 
 				1. If |representation|'s [=representation/MIME type=] is |mimeType| and |representation|'s [=representation/isCustom=] is |isCustom|, then:
 
-					1. If [=this=]'s [=ClipboardItem/clipboard change count at read=] is not null, and the current [=clipboard change count=] is not equal to [=this=]'s [=ClipboardItem/clipboard change count at read=], then [=reject=] |p| with a {{"DataError"}} {{DOMException}} in |realm|, and return |p|.
+					1. If [=this=]'s [=ClipboardItem/clipboard change count at read=] is not null, and the current [=clipboard change count=] is not equal to [=this=]'s [=ClipboardItem/clipboard change count at read=], then [=reject=] |p| with an {{"InvalidStateError"}} {{DOMException}} in |realm|, and return |p|.
 
 						Note: This ensures that stale data is never returned. If the [=system clipboard=] contents have changed since {{Clipboard/read()}} was called, this MUST fail rather than returning data that does not correspond to the current [=system clipboard=] state.
 
@@ -954,7 +954,7 @@ url: https://storage.spec.whatwg.org/#obtain-a-storage-key-for-non-storage-purpo
 
 							1. Let |clipboardItem| be [=this=]'s [=ClipboardItem/originating system clipboard item=].
 
-							1. If |clipboardItem| is null, then [=queue a global task=] on the [=clipboard task source=], given |realm|'s [=realm/global object=], to [=reject=] |p| with a {{"DataError"}} {{DOMException}} in |realm|, then abort these steps.
+							1. If |clipboardItem| is null, then [=queue a global task=] on the [=clipboard task source=], given |realm|'s [=realm/global object=], to [=reject=] |p| with an {{"InvalidStateError"}} {{DOMException}} in |realm|, then abort these steps.
 
 							1. If |isCustom| is true, then:
 
@@ -984,7 +984,7 @@ url: https://storage.spec.whatwg.org/#obtain-a-storage-key-for-non-storage-purpo
 
 							1. [=Queue a global task=] on the [=clipboard task source=], given |realm|'s [=realm/global object=], to resolve |p| with |blob|.
 
-						Note: Once |p| has settled, it remains in [=this=]'s [=ClipboardItem/representations with resolvers=] map. Subsequent {{ClipboardItem/getType()}} calls for the same MIME type will return the cached settled {{Promise}} without re-reading the [=system clipboard=]. The stale-data check above still applies on every call, however: if the [=system clipboard=] has changed since {{Clipboard/read()}} was called, all {{ClipboardItem/getType()}} calls on this {{ClipboardItem}} will be rejected with a {{"DataError"}} — even for previously cached data.
+						Note: Once |p| has settled, it remains in [=this=]'s [=ClipboardItem/representations with resolvers=] map. Subsequent {{ClipboardItem/getType()}} calls for the same MIME type will return the cached settled {{Promise}} without re-reading the [=system clipboard=]. The stale-data check above still applies on every call, however: if the [=system clipboard=] has changed since {{Clipboard/read()}} was called, all {{ClipboardItem/getType()}} calls on this {{ClipboardItem}} will be rejected with an {{"InvalidStateError"}} — even for previously cached data.
 
 						1. Return |p|.
 
