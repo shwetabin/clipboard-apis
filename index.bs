@@ -832,11 +832,11 @@ url: https://storage.spec.whatwg.org/#obtain-a-storage-key-for-non-storage-purpo
 
 		A {{ClipboardItem}} object has an associated <dfn for="ClipboardItem">types array</dfn>, which is a {{FrozenArray}}&lt;{{DOMString}}&gt;.
 
-		A {{ClipboardItem}} object has an associated <dfn for="ClipboardItem">clipboard change count at read</dfn>, which is initially null. When the {{ClipboardItem}} is created from {{Clipboard/read()}}, this is set to the [=clipboard change count=] at the time the [=system clipboard data=] was snapshotted.
+		A {{ClipboardItem}} object has an associated <dfn for="ClipboardItem">clipboard change count at read</dfn>, which is initially null.
 
-		A {{ClipboardItem}} object has an associated <dfn for="ClipboardItem">originating system clipboard item</dfn>, which is a [=system clipboard item=] or null, initially null. When the {{ClipboardItem}} is created from {{Clipboard/read()}}, this is set to the [=system clipboard item=] in the [=system clipboard data=] snapshot from which it was derived.
+		A {{ClipboardItem}} object has an associated <dfn for="ClipboardItem">originating system clipboard item</dfn>, which is a [=system clipboard item=] or null, initially null.
 
-		A {{ClipboardItem}} object has an associated <dfn for="ClipboardItem">unsanitized MIME types</dfn>, which is a [=sequence=]&lt;{{DOMString}}&gt;, initially empty. When the {{ClipboardItem}} is created from {{Clipboard/read()}}, this is set to the list of MIME types the caller requested as unsanitized via {{ClipboardUnsanitizedFormats}}.
+		A {{ClipboardItem}} object has an associated <dfn for="ClipboardItem">unsanitized MIME types</dfn>, which is a [=sequence=]&lt;{{DOMString}}&gt;, initially empty.
 
 		A {{ClipboardItem}} object has an associated <dfn for="ClipboardItem">representations with resolvers</dfn>, which is a [=/map=] from a string (the [=/MIME type=] as passed to {{ClipboardItem/getType()}}, including the `"web "` prefix when present) to a {{Promise}}&lt;{{Blob}}&gt;, initially empty. Each entry represents an OS clipboard read for that type that has either completed or is currently in flight.
 
